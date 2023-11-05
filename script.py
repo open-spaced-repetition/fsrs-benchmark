@@ -51,9 +51,7 @@ def predict(w_list, testsets, last_rating=None, file=None):
 
     for i, (w, testset) in enumerate(zip(w_list, testsets)):
         tmp = (
-            testset[
-                testset["r_history"].str.endswith(last_rating) & (testset["i"] > 2)
-            ].copy()
+            testset[(testset["last_rating"] == last_rating) & (testset["i"] > 2)].copy()
             if last_rating
             else testset.copy()
         )
@@ -110,6 +108,20 @@ def convert_to_items(df):  # -> list[FsrsItem]
     return result_list
 
 
+def get_last_rating(r_history: str, t_history: str) -> int:
+    r_history = [int(r) for r in r_history.split(",")]
+    t_history = [int(t) for t in t_history.split(",")]
+    flag = True
+    for t, r in zip(reversed(t_history), reversed(r_history)):
+        if t > 0:
+            last_rating = r
+            flag = False
+            break
+    if flag:
+        last_rating = r_history[0]
+    return last_rating
+
+
 def process(file):
     plt.close("all")
     rust = os.environ.get("FSRS_RS")
@@ -121,7 +133,12 @@ def process(file):
         dtype={"r_history": str, "t_history": str},
         keep_default_na=False,
     )
-    # dataset["first_rating"] = dataset.groupby("card_id")["r_history"].transform("first").map(lambda x: x[0])
+    dataset["first_rating"] = (
+        dataset.groupby("card_id")["r_history"].transform("first").map(lambda x: x[0])
+    )
+    dataset["last_rating"] = dataset.apply(
+        lambda x: get_last_rating(x["r_history"], x["t_history"]), axis=1
+    )
     dataset = dataset[(dataset["i"] > 1) & (dataset["delta_t"] > 0)]
     apply = dataset.apply if rust else dataset.progress_apply
     dataset["tensor"] = apply(
@@ -141,8 +158,8 @@ def process(file):
         # train_set.loc[train_set["i"] == 2, "delta_t"] = train_set.loc[train_set["i"] == 2, "delta_t"].map(lambda x: max(1, round(x)))
         optimizer.S0_dataset_group = (
             train_set[train_set["i"] == 2]
-            # .groupby(by=["first_rating", "delta_t"], group_keys=False)
-            .groupby(by=["r_history", "delta_t"], group_keys=False)
+            .groupby(by=["first_rating", "delta_t"], group_keys=False)
+            # .groupby(by=["r_history", "delta_t"], group_keys=False)
             .agg({"y": ["mean", "count"]})
             .reset_index()
         )
@@ -178,7 +195,7 @@ def process(file):
     size = len(y)
 
     rmse_bins_ratings = {}
-    for last_rating in ("1", "2", "3", "4"):
+    for last_rating in (1, 2, 3, 4):
         p, y = predict(w_list, testsets, last_rating=last_rating)
         if len(p) == 0:
             continue
