@@ -235,7 +235,7 @@ def lineToTensorRNN(line):
     response = line[1].split(",")
     tensor = torch.zeros(len(response), 5, dtype=torch.float32)
     for li, response in enumerate(response):
-        tensor[li][0] = int(ivl[li])
+        tensor[li][0] = float(ivl[li])
         tensor[li][int(response)] = 1
     return tensor
 
@@ -247,7 +247,7 @@ class RevlogDataset(Dataset):
         self.x_train = pad_sequence(
             dataframe["tensor"].to_list(), batch_first=True, padding_value=0
         )
-        self.t_train = torch.tensor(dataframe["delta_t"].values, dtype=torch.int)
+        self.t_train = torch.tensor(dataframe["delta_t"].values, dtype=torch.float)
         self.y_train = torch.tensor(dataframe["y"].values, dtype=torch.float)
         self.seq_len = torch.tensor(
             dataframe["tensor"].map(len).values, dtype=torch.long
